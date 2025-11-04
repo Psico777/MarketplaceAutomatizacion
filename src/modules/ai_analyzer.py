@@ -27,14 +27,17 @@ class AIImageAnalyzer:
         Returns:
             PIL.Image: Prepared image
         """
-        # Resize image if too large
+        # Open and check if resize is needed
         img = Image.open(image_path)
         if max(img.size) > self.max_size:
-            img.thumbnail((self.max_size, self.max_size), Image.Resampling.LANCZOS)
+            # Create a copy and resize
+            img_copy = img.copy()
+            img_copy.thumbnail((self.max_size, self.max_size), Image.Resampling.LANCZOS)
             temp_path = image_path.replace('.png', '_resized.png')
-            img.save(temp_path)
+            img_copy.save(temp_path)
             return Image.open(temp_path)
         
+        # Return the original image if no resize needed
         return img
     
     def analyze_image_for_marketplace(self, image_path):

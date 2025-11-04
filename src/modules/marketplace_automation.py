@@ -129,13 +129,26 @@ class MarketplaceAutomation:
                 print("No valid image paths found")
                 return False
             
-            # Upload all images at once (separated by newline)
-            file_input.send_keys('\n'.join(abs_paths))
-            
-            print(f"Uploaded {len(abs_paths)} images")
-            time.sleep(3)
-            
-            return True
+            # Try to upload all images at once (platform-dependent)
+            # If this fails, we'll need to upload one by one
+            try:
+                # Upload all images at once (separated by newline for multi-file input)
+                file_input.send_keys('\n'.join(abs_paths))
+                print(f"Uploaded {len(abs_paths)} images")
+                time.sleep(3)
+                return True
+            except Exception as e:
+                print(f"Batch upload failed, trying one by one: {e}")
+                # Upload one by one as fallback
+                for i, path in enumerate(abs_paths):
+                    try:
+                        file_input.send_keys(path)
+                        print(f"Uploaded image {i+1}/{len(abs_paths)}")
+                        time.sleep(1)
+                    except Exception as upload_error:
+                        print(f"Failed to upload {path}: {upload_error}")
+                
+                return True
             
         except Exception as e:
             print(f"Error uploading images: {e}")
@@ -336,8 +349,11 @@ class MarketplaceAutomation:
             list: List of listing URLs
         """
         try:
+            # Import Config to get URL
+            from config.settings import Config
+            
             print("Navigating to your listings...")
-            self.driver.get('https://www.facebook.com/marketplace/you/selling')
+            self.driver.get(Config.MARKETPLACE_SELLING_URL)
             time.sleep(5)
             
             # Find listing links

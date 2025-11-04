@@ -47,6 +47,9 @@ class FacebookAuthenticator:
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         
+        # Note: These settings help avoid detection as automation
+        # WARNING: Using automation with Facebook may violate their Terms of Service
+        # Use at your own risk and ensure compliance with Facebook's policies
         # Disable automation detection
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
