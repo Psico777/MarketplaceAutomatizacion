@@ -85,10 +85,12 @@ else:
     print(f"     ✗ Facebook password not configured")
     credentials_ok = False
 
-if Config.GEMINI_API_KEY and Config.GEMINI_API_KEY != 'your_api_key':
+if Config.GEMINI_API_KEY and len(Config.GEMINI_API_KEY) > 20:
     print(f"     ✓ Gemini API key configured")
+    if Config.GEMINI_API_KEY == 'AIzaSyDiyBs75bDIsM7kTl36DT0mccOVFFfETiI':
+        print(f"     ⚠ Using demo API key - get your own at https://makersuite.google.com/app/apikey")
 else:
-    print(f"     ✗ Gemini API key not configured")
+    print(f"     ✗ Gemini API key not configured or invalid")
     credentials_ok = False
 
 if Config.FACEBOOK_2FA_SECRET:

@@ -1,5 +1,18 @@
 # MarketplaceAutomatizacion
 
+## ⚠️ ADVERTENCIA LEGAL IMPORTANTE
+
+**Este software es para PROPÓSITOS EDUCATIVOS Y DE DEMOSTRACIÓN únicamente.**
+
+El uso de herramientas de automatización con Facebook puede **VIOLAR sus Términos de Servicio**. Al usar este software, usted:
+- Acepta TODA la responsabilidad por su uso
+- Reconoce que su cuenta de Facebook puede ser suspendida o terminada
+- Entiende que los autores NO son responsables de ninguna consecuencia
+
+**Lea y comprenda los [Términos de Servicio de Facebook](https://www.facebook.com/terms.php) antes de usar este software.**
+
+---
+
 ## 🚀 Sistema de Automatización para Facebook Marketplace con Gemini AI
 
 Automatización completa para Facebook Marketplace usando Selenium y Gemini AI. Este sistema permite reconocer productos desde PDFs, analizarlos con inteligencia artificial, y publicarlos automáticamente en Facebook Marketplace con soporte para autenticación 2FA.
