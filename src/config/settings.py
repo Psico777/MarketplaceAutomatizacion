@@ -16,6 +16,8 @@ class Config:
     FACEBOOK_2FA_SECRET = os.getenv('FACEBOOK_2FA_SECRET', '')
     
     # Gemini AI Configuration
+    # Note: The default API key is for demonstration purposes only
+    # For production use, set your own API key in .env file
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyDiyBs75bDIsM7kTl36DT0mccOVFFfETiI')
     AI_MODEL_IMAGE = os.getenv('AI_MODEL_IMAGE', 'gemini-2.5-flash')
     AI_MODEL_CHAT = os.getenv('AI_MODEL_CHAT', 'gemini-2.5-pro')
@@ -29,6 +31,7 @@ class Config:
     
     # URLs
     MARKETPLACE_URL = 'https://web.facebook.com/marketplace/create/item'
+    MARKETPLACE_SELLING_URL = 'https://www.facebook.com/marketplace/you/selling'
     FACEBOOK_LOGIN_URL = 'https://www.facebook.com/'
     
     # Directories

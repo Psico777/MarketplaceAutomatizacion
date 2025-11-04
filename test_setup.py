@@ -25,7 +25,7 @@ required_packages = {
     'PIL': 'Pillow (Image processing)',
     'PyPDF2': 'PDF processing',
     'pdf2image': 'PDF to image conversion',
-    'google.genai': 'Google Gemini AI',
+    'genai': 'Google Gemini AI',
     'dotenv': 'Environment variables',
     'pyotp': '2FA support'
 }
@@ -35,7 +35,7 @@ for package, description in required_packages.items():
     try:
         if package == 'PIL':
             import PIL
-        elif package == 'google.genai':
+        elif package == 'genai':
             from google import genai
         elif package == 'dotenv':
             import dotenv
