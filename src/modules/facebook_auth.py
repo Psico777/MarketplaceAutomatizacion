@@ -42,8 +42,13 @@ class FacebookAuthenticator:
         if self.headless:
             chrome_options.add_argument('--headless')
         
+        # Essential options for running in container/headless environments
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         
@@ -62,7 +67,19 @@ class FacebookAuthenticator:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        service = Service(ChromeDriverManager().install())
+        # Install ChromeDriver with proper driver path
+        driver_path = ChromeDriverManager().install()
+        # Ensure we get the actual chromedriver binary, not a text file
+        if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver') or not driver_path.endswith('chromedriver'):
+            import os
+            driver_dir = os.path.dirname(driver_path)
+            # Look for the actual chromedriver binary
+            for file in os.listdir(driver_dir):
+                if file == 'chromedriver' or file == 'chromedriver.exe':
+                    driver_path = os.path.join(driver_dir, file)
+                    break
+        
+        service = Service(driver_path)
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
         self.driver.implicitly_wait(self.implicit_wait)
         
@@ -115,6 +132,12 @@ class FacebookAuthenticator:
             
             time.sleep(5)
             
+            # Take screenshot for debugging
+            import os
+            os.makedirs('screenshots', exist_ok=True)
+            self.driver.save_screenshot('screenshots/after_login.png')
+            print("Screenshot saved to screenshots/after_login.png")
+            
             # Check for 2FA
             if self._check_2fa_required():
                 print("2FA required, handling...")
@@ -131,6 +154,11 @@ class FacebookAuthenticator:
                 return True
             else:
                 print("Login failed - not logged in after process")
+                print(f"Current URL: {self.driver.current_url}")
+                print(f"Page title: {self.driver.title}")
+                # Take another screenshot
+                self.driver.save_screenshot('screenshots/login_failed.png')
+                print("Screenshot saved to screenshots/login_failed.png")
                 return False
                 
         except Exception as e:
@@ -149,6 +177,9 @@ class FacebookAuthenticator:
     def _check_2fa_required(self):
         """Check if 2FA is required"""
         try:
+            # Check current URL for 2FA indicators
+            if 'two_step_verification' in self.driver.current_url or 'checkpoint' in self.driver.current_url:
+                return True
             # Look for 2FA code input field
             self.driver.find_element(By.ID, "approvals_code")
             return True
@@ -164,11 +195,32 @@ class FacebookAuthenticator:
         """
         try:
             if not self.two_fa_secret:
-                print("2FA secret not provided. Please enter code manually.")
-                time.sleep(60)  # Wait for manual entry
-                return True
+                print("\n" + "="*50)
+                print("2FA REQUIRED - Manual Code Entry")
+                print("="*50)
+                print("Facebook is asking for 2-factor authentication.")
+                print("Please check your authenticator app and enter the code.")
+                print("\nOptions:")
+                print("1. Enter the code manually in the browser within 60 seconds")
+                print("2. OR set FACEBOOK_2FA_SECRET in .env file for automatic entry")
+                print("="*50 + "\n")
+                
+                # Wait 60 seconds for manual entry
+                for i in range(60, 0, -10):
+                    print(f"Waiting {i} seconds for manual code entry...")
+                    time.sleep(10)
+                    if self._is_logged_in():
+                        print("2FA completed successfully!")
+                        return True
+                
+                # Check one more time
+                if self._is_logged_in():
+                    return True
+                else:
+                    print("Timeout: 2FA code not entered.")
+                    return False
             
-            # Generate 2FA code
+            # Generate 2FA code automatically
             totp = pyotp.TOTP(self.two_fa_secret)
             code = totp.now()
             print(f"Generated 2FA code: {code}")
