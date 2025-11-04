@@ -33,7 +33,12 @@ class AIImageAnalyzer:
             # Create a copy and resize
             img_copy = img.copy()
             img_copy.thumbnail((self.max_size, self.max_size), Image.Resampling.LANCZOS)
-            temp_path = image_path.replace('.png', '_resized.png')
+            
+            # Get file extension and create temp path
+            import os
+            base, ext = os.path.splitext(image_path)
+            temp_path = f"{base}_resized{ext if ext else '.png'}"
+            
             img_copy.save(temp_path)
             return Image.open(temp_path)
         
