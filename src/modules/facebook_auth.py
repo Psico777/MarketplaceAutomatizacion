@@ -17,22 +17,24 @@ from selenium.webdriver.chrome.options import Options
 class FacebookAuthenticator:
     """Handle Facebook authentication with 2FA support"""
     
-    def __init__(self, email, password, two_fa_secret=None, headless=False, implicit_wait=10):
+    def __init__(self, email, password, two_fa_secret=None, headless=False, implicit_wait=10, twofa_callback=None):
         """
-        Initialize Facebook authenticator
+        Initialize Facebook Authenticator
         
         Args:
             email (str): Facebook email
             password (str): Facebook password
-            two_fa_secret (str, optional): 2FA secret key
+            two_fa_secret (str, optional): TOTP secret for 2FA
             headless (bool): Run browser in headless mode
             implicit_wait (int): Implicit wait time in seconds
+            twofa_callback (callable, optional): Callback function for 2FA confirmation
         """
         self.email = email
         self.password = password
         self.two_fa_secret = two_fa_secret
         self.headless = headless
         self.implicit_wait = implicit_wait
+        self.twofa_callback = twofa_callback
         self.driver = None
     
     def setup_driver(self):
@@ -42,7 +44,7 @@ class FacebookAuthenticator:
         if self.headless:
             chrome_options.add_argument('--headless')
         
-        # Essential options for running in container/headless environments
+        # Essential options for modern Facebook interface
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
@@ -50,7 +52,21 @@ class FacebookAuthenticator:
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        
+        # Modern user agent to force modern Facebook UI
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+        
+        # Force modern UI - no mobile/old versions
+        chrome_options.add_argument('--force-device-scale-factor=1.0')
+        
+        # Disable old/basic mode redirects
+        prefs = {
+            'profile.default_content_setting_values.notifications': 2,
+            'profile.default_content_setting_values.media_stream_camera': 2,
+            'profile.default_content_setting_values.media_stream_mic': 2,
+            'profile.default_content_setting_values.geolocation': 2
+        }
+        chrome_options.add_experimental_option('prefs', prefs)
         
         # ⚠️⚠️⚠️ IMPORTANT LEGAL WARNING ⚠️⚠️⚠️
         # The settings below attempt to hide automation detection
@@ -96,7 +112,7 @@ class FacebookAuthenticator:
             url (str): Facebook URL to navigate to
             
         Returns:
-            bool: True if login successful, False otherwise
+            webdriver: Chrome driver instance if successful, None otherwise
         """
         try:
             if not self.driver:
@@ -104,12 +120,12 @@ class FacebookAuthenticator:
             
             print("Navigating to Facebook...")
             self.driver.get(url)
-            time.sleep(3)
+            time.sleep(0.2)  # Reducido de 3 a 0.2
             
             # Check if already logged in
             if self._is_logged_in():
                 print("Already logged in!")
-                return True
+                return self.driver
             
             # Find and fill email
             print("Entering email...")
@@ -130,7 +146,7 @@ class FacebookAuthenticator:
             login_button = self.driver.find_element(By.NAME, "login")
             login_button.click()
             
-            time.sleep(5)
+            time.sleep(0.2)  # Reducido de 5 a 0.2
             
             # Take screenshot for debugging
             import os
@@ -143,7 +159,7 @@ class FacebookAuthenticator:
                 print("2FA required, handling...")
                 if not self._handle_2fa():
                     print("Failed to handle 2FA")
-                    return False
+                    return None
             
             # Check for other security checks
             self._handle_security_checks()
@@ -151,7 +167,7 @@ class FacebookAuthenticator:
             # Verify login
             if self._is_logged_in():
                 print("Login successful!")
-                return True
+                return self.driver
             else:
                 print("Login failed - not logged in after process")
                 print(f"Current URL: {self.driver.current_url}")
@@ -159,11 +175,11 @@ class FacebookAuthenticator:
                 # Take another screenshot
                 self.driver.save_screenshot('screenshots/login_failed.png')
                 print("Screenshot saved to screenshots/login_failed.png")
-                return False
+                return None
                 
         except Exception as e:
             print(f"Error during login: {e}")
-            return False
+            return None
     
     def _is_logged_in(self):
         """Check if user is logged in"""
@@ -194,31 +210,62 @@ class FacebookAuthenticator:
             bool: True if 2FA handled successfully, False otherwise
         """
         try:
-            if not self.two_fa_secret:
-                print("\n" + "="*50)
-                print("2FA REQUIRED - Manual Code Entry")
-                print("="*50)
-                print("Facebook is asking for 2-factor authentication.")
-                print("Please check your authenticator app and enter the code.")
-                print("\nOptions:")
-                print("1. Enter the code manually in the browser within 60 seconds")
-                print("2. OR set FACEBOOK_2FA_SECRET in .env file for automatic entry")
-                print("="*50 + "\n")
+            # Si no hay secret configurado O es inválido, usar aprobación manual
+            if not self.two_fa_secret or len(self.two_fa_secret) < 16:
+                print("\n" + "="*60)
+                print("🔐 2FA REQUERIDO - Aprobación en tu Celular")
+                print("="*60)
+                print("Facebook está solicitando autenticación de dos factores.")
+                print("\n📱 INSTRUCCIONES:")
+                print("1. Revisa tu celular - debe aparecer notificación de Facebook")
+                print("2. Abre la app de Facebook y APRUEBA el inicio de sesión")
+                print("3. Espera a que Chrome cargue tu perfil de Facebook")
+                print("4. Cuando veas tu feed/inicio de Facebook, presiona ENTER aquí")
+                print("\n⏳ El script está PAUSADO esperando tu confirmación...")
+                print("="*60 + "\n")
                 
-                # Wait 60 seconds for manual entry
-                for i in range(60, 0, -10):
-                    print(f"Waiting {i} seconds for manual code entry...")
-                    time.sleep(10)
-                    if self._is_logged_in():
-                        print("2FA completed successfully!")
-                        return True
+                # Si hay callback (GUI), usarlo; sino usar input()
+                if self.twofa_callback:
+                    # GUI mode - callback bloqueará hasta que usuario confirme
+                    try:
+                        result = self.twofa_callback()
+                        if not result:
+                            print("\n✗ Usuario canceló la confirmación 2FA")
+                            return False
+                    except Exception as e:
+                        print(f"Error handling 2FA: {e}")
+                        return False
+                else:
+                    # Terminal mode - usar input()
+                    try:
+                        input(">>> Presiona ENTER cuando estés dentro de Facebook: ")
+                    except KeyboardInterrupt:
+                        print("\n✗ Cancelado por el usuario")
+                        return False
+                    except:
+                        # Si falla el input (por ejemplo en background), esperar un tiempo
+                        print("No se pudo capturar input, esperando 60 segundos...")
+                        time.sleep(60)
                 
-                # Check one more time
+                print("\n✓ Continuando... verificando login...")
+                time.sleep(1)  # Dar tiempo para que Facebook cargue después de aprobar
+                
+                # Verificar si el login fue exitoso
                 if self._is_logged_in():
+                    print("✓ 2FA completado exitosamente!")
                     return True
                 else:
-                    print("Timeout: 2FA code not entered.")
-                    return False
+                    print("⚠ Verificando de nuevo...")
+                    # Dar una segunda oportunidad
+                    time.sleep(2)  # Dar más tiempo si no detectó el login inmediatamente
+                    if self._is_logged_in():
+                        print("✓ 2FA completado!")
+                        return True
+                    else:
+                        print("✗ Login no completado. Por favor verifica:")
+                        print("  - Que hayas aprobado en tu celular")
+                        print("  - Que Chrome muestre tu feed de Facebook")
+                        return False
             
             # Generate 2FA code automatically
             totp = pyotp.TOTP(self.two_fa_secret)
@@ -234,13 +281,13 @@ class FacebookAuthenticator:
             submit_button = self.driver.find_element(By.ID, "checkpointSubmitButton")
             submit_button.click()
             
-            time.sleep(5)
+            time.sleep(0.2)  # Reducido de 5 a 0.2
             
             # Handle "Don't save browser" option
             try:
                 dont_save = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Not Now') or contains(text(), 'Don')]")
                 dont_save.click()
-                time.sleep(2)
+                time.sleep(0.1)  # Reducido de 2 a 0.1
             except NoSuchElementException:
                 pass
             
@@ -259,7 +306,7 @@ class FacebookAuthenticator:
                     EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Not Now')]"))
                 )
                 not_now.click()
-                time.sleep(2)
+                time.sleep(0.1)  # Reducido de 2 a 0.1
             except TimeoutException:
                 pass
             
@@ -267,7 +314,7 @@ class FacebookAuthenticator:
             try:
                 not_now = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Not Now') or contains(text(), 'Block')]")
                 not_now.click()
-                time.sleep(2)
+                time.sleep(0.1)  # Reducido de 2 a 0.1
             except NoSuchElementException:
                 pass
                 

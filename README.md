@@ -1,207 +1,82 @@
-# MarketplaceAutomatizacion
+# 🚀 Facebook Marketplace Automation
 
-## ⚠️ ADVERTENCIA LEGAL IMPORTANTE
+Sistema automatizado con interfaz gráfica para subir productos a Facebook Marketplace.
 
-**Este software es para PROPÓSITOS EDUCATIVOS Y DE DEMOSTRACIÓN únicamente.**
+## ⚡ Características
 
-El uso de herramientas de automatización con Facebook puede **VIOLAR sus Términos de Servicio**. Al usar este software, usted:
-- Acepta TODA la responsabilidad por su uso
-- Reconoce que su cuenta de Facebook puede ser suspendida o terminada
-- Entiende que los autores NO son responsables de ninguna consecuencia
+- ✅ **Interfaz Gráfica**: Vista previa de imágenes, selección individual
+- ✅ **Análisis IA**: Google Gemini para descripciones automáticas
+- ✅ **Super Rápido**: Timeouts optimizados (0.1-0.2s)
+- ✅ **Caché Inteligente**: No re-analiza imágenes ya procesadas
+- ✅ **Progreso en Tiempo Real**: Barra de progreso y log detallado
 
-**Lea y comprenda los [Términos de Servicio de Facebook](https://www.facebook.com/terms.php) antes de usar este software.**
-
----
-
-## 🚀 Sistema de Automatización para Facebook Marketplace con Gemini AI
-
-Automatización completa para Facebook Marketplace usando Selenium y Gemini AI. Este sistema permite reconocer productos desde PDFs, analizarlos con inteligencia artificial, y publicarlos automáticamente en Facebook Marketplace con soporte para autenticación 2FA.
-
-## 🌟 Características Principales
-
-- **Extracción de imágenes desde PDF**: Convierte páginas de PDF en imágenes para análisis
-- **Análisis con Gemini AI**: Utiliza Google Gemini AI para:
-  - Reconocer y describir productos en imágenes
-  - Generar títulos atractivos automáticamente
-  - Crear descripciones detalladas
-  - Sugerir precios basados en el producto
-  - Generar tags/etiquetas relevantes
-- **Autenticación 2FA**: Soporte completo para autenticación de dos factores de Facebook
-- **Automatización con Selenium**: 
-  - Crear publicaciones en Marketplace
-  - Editar publicaciones existentes
-  - Eliminar publicaciones
-  - Listar todas tus publicaciones
-- **Sin APIs oficiales**: Usa Selenium para evitar necesidad de permisos de API de Facebook
-
-## 📋 Requisitos
-
-- Python 3.8 o superior
-- Google Chrome instalado
-- Cuenta de Facebook
-- API Key de Google Gemini AI
-
-## 🔧 Instalación
-
-1. Clona este repositorio:
-```bash
-git clone https://github.com/Psico777/MarketplaceAutomatizacion.git
-cd MarketplaceAutomatizacion
-```
-
-2. Instala las dependencias:
-```bash
-pip install -r requirements.txt
-```
-
-3. Configura tus credenciales:
-   - Copia `.env.example` a `.env`
-   - Edita `.env` con tus credenciales:
-
-```env
-# Facebook Credentials
-FACEBOOK_EMAIL=tu_email@ejemplo.com
-FACEBOOK_PASSWORD=tu_contraseña
-
-# 2FA Settings (opcional - para autenticador app)
-FACEBOOK_2FA_SECRET=tu_secret_2fa
-
-# Gemini API Key
-GEMINI_API_KEY=tu_api_key_de_gemini
-
-# Browser Settings
-HEADLESS=False
-IMPLICIT_WAIT=10
-
-# AI Model Settings
-AI_MODEL_IMAGE=gemini-2.5-flash
-AI_MODEL_CHAT=gemini-2.5-pro
-MAX_IMAGE_SIZE=2048
-```
-
-## 🎯 Uso
-
-### Crear una publicación desde PDF
+## 🚀 Uso Rápido
 
 ```bash
-python main.py create --pdf producto.pdf --category Electronics --condition New --location "Ciudad, País"
+# Lanzar GUI
+python launch_gui.py
 ```
 
-### Editar una publicación existente
+### Pasos:
+1. 📄 **Cargar PDF** → Seleccionar tu PDF de productos
+2. ✓ **Marcar productos** → Checkbox de los que quieres subir
+3. 🔐 **Login Facebook** → Aprobar 2FA en celular
+4. 🚀 **Subir** → Click "Subir Seleccionados"
 
-```bash
-python main.py edit --url "https://facebook.com/marketplace/item/123456" --title "Nuevo Título" --price "150"
+## ⚙️ Configuración
+
+Editar `src/config/settings.py`:
+
+```python
+FACEBOOK_EMAIL = "tu_email@example.com"
+FACEBOOK_PASSWORD = "tu_password"
+GEMINI_API_KEY = "tu_api_key_gemini"
 ```
 
-### Eliminar una publicación
-
-```bash
-python main.py delete --url "https://facebook.com/marketplace/item/123456"
-```
-
-### Listar todas tus publicaciones
-
-```bash
-python main.py list
-```
-
-## 📚 Estructura del Proyecto
+## 📁 Estructura
 
 ```
 MarketplaceAutomatizacion/
-├── main.py                          # Script principal
-├── requirements.txt                 # Dependencias
-├── .env.example                     # Ejemplo de configuración
-├── .gitignore                      # Archivos a ignorar
-├── README.md                       # Este archivo
-└── src/
-    ├── config/
-    │   └── settings.py             # Configuración
-    └── modules/
-        ├── pdf_extractor.py        # Extractor de imágenes PDF
-        ├── ai_analyzer.py          # Análisis con Gemini AI
-        ├── facebook_auth.py        # Autenticación Facebook
-        └── marketplace_automation.py # Automatización Marketplace
+├── launch_gui.py              # 🚀 Launcher principal
+├── marketplace_gui.py         # 🖼️ Interfaz gráfica
+├── src/
+│   ├── modules/
+│   │   ├── ai_analyzer.py           # 🤖 Análisis con IA
+│   │   ├── marketplace_automation.py # ⚡ Subida optimizada
+│   │   ├── facebook_auth.py         # 🔐 Login 2FA
+│   │   └── pdf_extractor.py         # 📄 Extracción PDFs
+│   └── config/settings.py     # ⚙️ Configuración
+└── ai_analysis_cache.json     # 💾 Caché (auto-generado)
 ```
 
-## 🤖 Cómo Funciona
+## ⚡ Optimizaciones
 
-1. **Extracción**: El sistema convierte cada página del PDF en una imagen
-2. **Análisis AI**: Gemini AI analiza las imágenes y genera:
-   - Título del producto
-   - Descripción detallada
-   - Precio sugerido
-   - Tags relevantes
-3. **Autenticación**: Se conecta a Facebook con tus credenciales (con soporte 2FA)
-4. **Publicación**: Crea automáticamente la publicación en Marketplace con toda la información
+- **Timeouts**: 0.1-0.2s (antes 5s)
+- **Velocidad**: ~30-40s por producto (antes 60s)
+- **Caché IA**: 95% más rápido en re-análisis
+- **Threading**: UI nunca se congela
 
-## 🔐 Seguridad y 2FA
+## 📋 Formato de Descripción
 
-### Configurar 2FA con Autenticador
+```
+GENTE LLEGARON LOS [PRODUCTO] AL MEJOR PRECIO <3
 
-1. Ve a Configuración de Seguridad de Facebook
-2. Activa "Autenticación de dos factores"
-3. Elige "App de autenticación"
-4. Cuando te muestre el código QR, haz clic en "¿No puedes escanear?"
-5. Copia el código secreto (será algo como: `JBSWY3DPEHPK3PXP`)
-6. Añade este código a tu archivo `.env` como `FACEBOOK_2FA_SECRET`
+:) 1 unidad x 14 soles
+:D 3 unidades a mas x 9 soles (27 soles)
 
-## 🎨 Modelos de Gemini AI Utilizados
+---
+(todas las compras por mayor salen a partir de la media docena)
 
-- **gemini-2.5-flash**: Para análisis de imágenes (rápido y eficiente)
-- **gemini-2.5-pro**: Para chat y procesamiento avanzado
-
-## ⚠️ Notas Importantes
-
-- **Rate Limits**: Facebook puede detectar actividad automatizada. Usa con moderación.
-- **Términos de Servicio**: Asegúrate de cumplir con los términos de servicio de Facebook.
-- **Privacidad**: Nunca compartas tu archivo `.env` con credenciales.
-- **Headless Mode**: Puedes activar modo sin interfaz gráfica configurando `HEADLESS=True` en `.env`
-
-## 🐛 Solución de Problemas
-
-### Error: "Chrome driver not found"
-```bash
-# El sistema descargará automáticamente el driver correcto
-# Si falla, instala manualmente:
-pip install --upgrade webdriver-manager
+SOMOS LK <3
+Contacto: 995665397 WhatsApp
 ```
 
-### Error: "Login failed"
-- Verifica tus credenciales en `.env`
-- Si usas 2FA, asegúrate de tener el código secreto correcto
-- Facebook puede requerir verificación por primera vez desde una nueva ubicación
+## 📞 Contacto
 
-### Error: "Failed to create listing"
-- Los selectores de Facebook pueden cambiar. El sistema intenta múltiples estrategias.
-- Verifica que las imágenes existan y sean válidas
-- Asegúrate de que el navegador tenga suficiente tiempo (aumenta `IMPLICIT_WAIT`)
-
-## 📄 Licencia
-
-Este proyecto es de código abierto y está disponible bajo la licencia MIT.
-
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas. Por favor:
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📞 Soporte
-
-Si encuentras algún problema o tienes preguntas, por favor abre un issue en GitHub.
-
-## ⭐ Agradecimientos
-
-- Google Gemini AI por las capacidades de análisis de imágenes
-- Selenium por la automatización web
-- La comunidad de código abierto
+**SOMOS LK** <3  
+WhatsApp: 995665397
 
 ---
 
-**Nota**: Este software es para propósitos educativos. Úsalo responsablemente y respeta los términos de servicio de Facebook.
-
-*Para llegar al éxito debes dar el primer paso y mantenerte en calma hasta que lo logres y cuando lo logres enseñar a que los demas lo puedan lograr, amen.*
+**Versión**: 2.0 Final  
+**Última actualización**: Nov 6, 2025

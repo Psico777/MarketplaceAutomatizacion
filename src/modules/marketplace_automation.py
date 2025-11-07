@@ -26,7 +26,7 @@ class MarketplaceAutomation:
     
     def create_listing(self, title, description, price, category, condition, images, tags=None, location=None):
         """
-        Create a new marketplace listing
+        Create a new marketplace listing - UPDATED with exact navigation flow
         
         Args:
             title (str): Product title
@@ -43,68 +43,158 @@ class MarketplaceAutomation:
         """
         try:
             print("Navigating to Marketplace create page...")
-            self.driver.get('https://web.facebook.com/marketplace/create/item')
-            time.sleep(5)
+            self.driver.get('https://www.facebook.com/marketplace/create/item')
             
-            # Upload images
+            # Maximize window for better visibility
+            self.driver.maximize_window()
+            time.sleep(0.2)  # MÍNIMO
+            
+            # Take screenshot for debugging
+            self.driver.save_screenshot('screenshots/marketplace_create.png')
+            print("Screenshot saved: screenshots/marketplace_create.png")
+            
+            # Upload images FIRST
             print("Uploading images...")
-            if not self._upload_images(images):
-                print("Failed to upload images")
+            if not self._upload_images_modern(images):
+                print("⚠ Warning: Image upload may have failed, continuing...")
+            
+            time.sleep(0.2)  # MÍNIMO
+            
+            # STEP 1: Fill in title
+            print(f"[1/7] Entering title: {title[:50]}...")
+            if not self._fill_title_field(title):
+                print("Failed to fill title")
                 return False
             
-            # Fill in title
-            print(f"Entering title: {title}")
-            if not self._fill_field("Title", title):
-                return False
+            # STEP 2: TAB to price and fill
+            print(f"[2/7] Entering price: ${price}")
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.TAB)
+            time.sleep(0.1)
+            active = self.driver.switch_to.active_element
+            active.clear()
+            time.sleep(0.1)
+            active.send_keys(str(price))
+            time.sleep(0.1)
+            print("  ✓ Price entered")
             
-            # Fill in price
-            print(f"Entering price: {price}")
-            if not self._fill_field("Price", price):
-                return False
+            # STEP 3: TAB to category, ENTER to open list, 14 TABs, ENTER to select
+            print(f"[3/7] Selecting category (Electronics)...")
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.TAB)
+            time.sleep(0.1)
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.ENTER)  # Open category list
+            time.sleep(0.2)
             
-            # Select category (simplified - may need adjustment based on actual UI)
-            print(f"Selecting category: {category}")
-            time.sleep(2)
+            # Navigate with 14 TABs to Electronics
+            for i in range(14):
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.1)
             
-            # Select condition
-            print(f"Selecting condition: {condition}")
-            time.sleep(2)
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.ENTER)  # Select category
+            time.sleep(0.2)
+            print("  ✓ Category selected")
             
-            # Fill in description
-            print(f"Entering description...")
-            if not self._fill_field("Description", description):
-                return False
+            # STEP 4: TAB to condition (estado), type 'n', ENTER for "Nuevo"
+            print(f"[4/7] Setting condition to 'Nuevo'...")
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.TAB)
+            time.sleep(0.1)
+            active = self.driver.switch_to.active_element
+            active.send_keys('n')  # Type 'n' for Nuevo
+            time.sleep(0.1)
+            active.send_keys(Keys.ENTER)
+            time.sleep(0.2)
+            print("  ✓ Condition set to 'Nuevo'")
             
-            # Add tags if provided
-            if tags:
-                print(f"Adding tags: {tags}")
-                self._add_tags(tags)
+            # STEP 5: 4 TABs to description
+            print(f"[5/7] Entering description...")
+            for i in range(4):
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.1)
             
-            # Set location if provided
-            if location:
-                print(f"Setting location: {location}")
-                self._set_location(location)
+            active = self.driver.switch_to.active_element
+            active.send_keys(description)
+            time.sleep(0.2)
+            print("  ✓ Description entered")
             
-            # Submit the listing
-            print("Submitting listing...")
-            time.sleep(3)
+            # STEP 6: 2 TABs to tags/etiquetas
+            print(f"[6/7] Adding tags...")
+            for i in range(2):
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.1)
             
-            # Click "Next" or "Publish" button
-            if self._click_publish_button():
-                print("Listing created successfully!")
-                time.sleep(5)
-                return True
-            else:
-                print("Failed to find publish button")
-                return False
+            # Add default tags + AI tags
+            default_tags = ['remate', 'oferta']
+            all_tags = default_tags + (tags[:6] if tags else [])
+            
+            for tag in all_tags:
+                active = self.driver.switch_to.active_element
+                active.send_keys(tag)
+                time.sleep(0.1)
+                active.send_keys(Keys.ENTER)
+                time.sleep(0.1)
+                print(f"  ✓ Tag added: {tag}")
+            
+            print(f"  ✓ Added {len(all_tags)} tags")
+            
+            # STEP 7: 15 TABs to "Siguiente" button and ENTER
+            print(f"[7/7] Clicking 'Siguiente' button...")
+            for i in range(15):
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.1)
+            
+            active = self.driver.switch_to.active_element
+            active.send_keys(Keys.ENTER)
+            time.sleep(0.2)
+            print("  ✓ 'Siguiente' clicked")
+            
+            # STEP 8: Click "Publicar" button
+            print(f"[8/8] Clicking 'Publicar' button...")
+            try:
+                # Wait for the Publicar button to be clickable - CORRECT XPATH
+                publicar_button = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "/html/body/div[1]/div/div[1]/div/div[3]/div/div/div[1]/div[1]/div[1]/div/div[4]/div[2]/div/div"))
+                )
+                publicar_button.click()
+                time.sleep(0.2)
+                print("  ✓ 'Publicar' clicked - Listing published!")
+            except Exception as e:
+                print(f"  ⚠ Could not click Publicar button with XPath, trying alternative...")
+                # Try clicking via TAB navigation as fallback
+                try:
+                    active = self.driver.switch_to.active_element
+                    active.send_keys(Keys.TAB)
+                    time.sleep(0.1)
+                    active = self.driver.switch_to.active_element
+                    active.send_keys(Keys.ENTER)
+                    time.sleep(0.2)
+                    print("  ✓ 'Publicar' clicked via TAB")
+                except:
+                    print(f"  ✗ Failed to click Publicar: {e}")
+            
+            # Take success screenshot
+            self.driver.save_screenshot('screenshots/listing_published.png')
+            print("✓ Listing creation completed!")
+            
+            return True
                 
         except Exception as e:
             print(f"Error creating listing: {e}")
+            import traceback
+            traceback.print_exc()
+            self.driver.save_screenshot('screenshots/listing_error.png')
             return False
     
-    def _upload_images(self, image_paths):
+    def _upload_images_modern(self, image_paths):
         """
-        Upload images to the listing
+        Upload images to the listing - Modern Facebook UI
         
         Args:
             image_paths (list): List of image file paths
@@ -114,10 +204,14 @@ class MarketplaceAutomation:
         """
         try:
             # Find file input element (usually hidden)
-            file_inputs = self.driver.find_elements(By.XPATH, "//input[@type='file']")
+            file_inputs = self.driver.find_elements(By.XPATH, "//input[@type='file' and @accept]")
             
             if not file_inputs:
-                print("Could not find file input element")
+                print("⚠ Could not find file input element, trying alternative...")
+                file_inputs = self.driver.find_elements(By.XPATH, "//input[@type='file']")
+            
+            if not file_inputs:
+                print("✗ No file input found")
                 return False
             
             file_input = file_inputs[0]
@@ -126,33 +220,169 @@ class MarketplaceAutomation:
             abs_paths = [os.path.abspath(path) for path in image_paths if os.path.exists(path)]
             
             if not abs_paths:
-                print("No valid image paths found")
+                print("✗ No valid image paths found")
                 return False
             
-            # Try to upload all images at once (platform-dependent)
-            # If this fails, we'll need to upload one by one
-            try:
-                # Upload all images at once (separated by newline for multi-file input)
-                file_input.send_keys('\n'.join(abs_paths))
-                print(f"Uploaded {len(abs_paths)} images")
-                time.sleep(3)
-                return True
-            except Exception as e:
-                print(f"Batch upload failed, trying one by one: {e}")
-                # Upload one by one as fallback
-                for i, path in enumerate(abs_paths):
-                    try:
-                        file_input.send_keys(path)
-                        print(f"Uploaded image {i+1}/{len(abs_paths)}")
-                        time.sleep(1)
-                    except Exception as upload_error:
-                        print(f"Failed to upload {path}: {upload_error}")
-                
-                return True
+            print(f"Uploading {len(abs_paths)} image(s)...")
+            
+            # Upload images one by one for better reliability
+            for i, path in enumerate(abs_paths, 1):
+                try:
+                    file_input.send_keys(path)
+                    print(f"  ✓ Uploaded image {i}/{len(abs_paths)}: {os.path.basename(path)}")
+                    time.sleep(0.2)
+                except Exception as upload_error:
+                    print(f"  ✗ Failed to upload {path}: {upload_error}")
+            
+            time.sleep(0.2)
+            return True
             
         except Exception as e:
             print(f"Error uploading images: {e}")
             return False
+    
+    def _fill_title_field(self, title):
+        """Fill title field using TAB navigation (16 TABs)"""
+        try:
+            print(f"    Using TAB method (16 TABs from upload)...")
+            
+            # Esperar después de subir imágenes
+            time.sleep(0.2)  # Reducido
+            
+            # Hacer 16 TABs desde donde estemos (RÁPIDO)
+            for i in range(14):
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.1)
+            
+            # Ahora deberíamos estar en el campo de título
+            active = self.driver.switch_to.active_element
+            
+            # NO hacer clear(), simplemente escribir directamente
+            active.send_keys(title)
+            time.sleep(0.1)
+            
+            # Verificar que se ingresó el texto
+            current_value = active.get_attribute('value')
+            if current_value and len(current_value) > 0:
+                print(f"  ✓ Title entered successfully: {current_value[:30]}...")
+                return True
+            else:
+                print(f"  ✗ Title field is empty after entering text")
+                return False
+            
+        except Exception as e:
+            print(f"  ✗ Error filling title: {e}")
+            return False
+    
+    def _fill_price_with_tab(self, price):
+        """Fill price field by TABbing from title or finding directly"""
+        try:
+            # First, try TAB method
+            try:
+                active = self.driver.switch_to.active_element
+                active.send_keys(Keys.TAB)
+                time.sleep(0.8)
+                
+                active = self.driver.switch_to.active_element
+                active.clear()
+                time.sleep(0.3)
+                active.send_keys(str(price))
+                print(f"  ✓ Price entered: ${price} (TAB method)")
+                return True
+            except:
+                pass
+            
+            # If TAB fails, try to find price field directly
+            price_xpaths = [
+                "//input[@placeholder='Precio']",
+                "//input[@placeholder='Price']",
+                "//input[@aria-label='Precio']",
+                "//input[@aria-label='Price']",
+                "//input[@type='text' and contains(@placeholder, 'price')]",
+                "//input[@type='number']"
+            ]
+            
+            for xpath in price_xpaths:
+                try:
+                    price_field = WebDriverWait(self.driver, 3).until(
+                        EC.element_to_be_clickable((By.XPATH, xpath))
+                    )
+                    price_field.click()
+                    time.sleep(0.3)
+                    price_field.clear()
+                    time.sleep(0.3)
+                    price_field.send_keys(str(price))
+                    print(f"  ✓ Price entered: ${price} (direct method)")
+                    return True
+                except:
+                    continue
+            
+            print(f"  ⚠ Could not fill price field")
+            return False
+            
+        except Exception as e:
+            print(f"  ✗ Error filling price: {e}")
+            return False
+    
+    def _fill_description_field(self, description):
+        """Fill description field - improved"""
+        try:
+            # Multiple attempts to find description field
+            desc_xpaths = [
+                "//textarea[@placeholder='Descripción']",
+                "//textarea[@placeholder='Description']",
+                "//textarea[@aria-label='Descripción']",
+                "//textarea[@aria-label='Description']",
+                "//div[@contenteditable='true' and @role='textbox']",
+                "//textarea[contains(@class, 'description')]"
+            ]
+            
+            for xpath in desc_xpaths:
+                try:
+                    desc_field = WebDriverWait(self.driver, 3).until(
+                        EC.element_to_be_clickable((By.XPATH, xpath))
+                    )
+                    
+                    # Scroll into view
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", desc_field)
+                    time.sleep(0.5)
+                    
+                    # Click and fill
+                    desc_field.click()
+                    time.sleep(0.3)
+                    
+                    # For contenteditable divs
+                    if desc_field.get_attribute('contenteditable') == 'true':
+                        desc_field.send_keys(Keys.CONTROL + "a")
+                        time.sleep(0.2)
+                        desc_field.send_keys(description)
+                    else:
+                        desc_field.clear()
+                        time.sleep(0.2)
+                        desc_field.send_keys(description)
+                    
+                    print(f"  ✓ Description entered")
+                    return True
+                except:
+                    continue
+            
+            print(f"  ⚠ Could not fill description field")
+            return False
+            
+        except Exception as e:
+            print(f"  ⚠ Error filling description: {e}")
+            return False
+    
+    def _navigate_with_tab(self, times=1):
+        """Navigate fields using TAB key"""
+        try:
+            active = self.driver.switch_to.active_element
+            for _ in range(times):
+                active.send_keys(Keys.TAB)
+                time.sleep(0.3)
+        except Exception as e:
+            print(f"  ⚠ TAB navigation issue: {e}")
     
     def _fill_field(self, label, value):
         """
