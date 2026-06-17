@@ -12,10 +12,60 @@ from PIL import Image
 class AIImageAnalyzer:
     """Analyze images using Gemini AI to generate product information"""
     
-    def __init__(self, api_key, model='gemini-2.5-flash', max_size=2048):
+    def __init__(self, api_key, model='gemini-2.5-flash', max_size=2048,
+                 chat_model='gemini-2.5-flash'):
         self.client = genai.Client(api_key=api_key)
         self.model = model
+        self.chat_model = chat_model
         self.max_size = max_size
+
+    def generate_reply(self, message, business_context="", history=None):
+        """
+        Genera una respuesta de atención al cliente para un mensaje entrante.
+        Usado por el responder de Messenger.
+
+        Args:
+            message (str): texto del cliente.
+            business_context (str): info del negocio (productos, precios, horario,
+                                    forma de pago, etc.) para que responda bien.
+            history (list[str], optional): mensajes previos del hilo, para contexto.
+
+        Returns:
+            str: respuesta lista para enviar (sin emojis Unicode, tono cercano).
+        """
+        hist = "\n".join(history[-6:]) if history else "(sin historial)"
+        prompt = f"""Eres el asistente de atención al cliente de SOMOS LK, una tienda
+peruana que vende productos por mayor y menor. Respondes mensajes en Facebook
+de forma BREVE, cordial y humana (como un vendedor peruano amable), en español.
+
+CONTEXTO DEL NEGOCIO:
+{business_context or '(usa info general de la tienda)'}
+
+REGLAS:
+- Máximo 2-3 frases. Natural, no robótico.
+- Solo ASCII y <3 :) :D (NADA de emojis Unicode).
+- Si preguntan precio y lo sabes por el contexto, dilo; si no, pide qué producto.
+- Cierra invitando a concretar la compra o pasar al WhatsApp 995665397.
+- No inventes datos que no tengas.
+
+HISTORIAL DEL CHAT:
+{hist}
+
+MENSAJE DEL CLIENTE:
+{message}
+
+RESPUESTA (solo el texto a enviar):"""
+        try:
+            resp = self.client.models.generate_content(
+                model=self.chat_model, contents=[prompt]
+            )
+            text = (resp.text or "").strip()
+            # Una sola línea limpia para enviarla por el chat
+            return " ".join(text.split()) if text else \
+                "Hola! Cuentame que producto te interesa y te paso el precio :)"
+        except Exception as e:
+            print(f"Error generando respuesta IA: {e}")
+            return "Hola! En un momento te atendemos :) Escribenos al WhatsApp 995665397 <3"
     
     def prepare_image(self, image_path):
         """
@@ -198,8 +248,9 @@ TAGS: [tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8]"""
                 # Find first number in the text (could be "9.50" or "20.00" or just "9")
                 numbers = re.findall(r'\d+\.?\d*', price_text)
                 if numbers:
-                    # Convert to float then to int to round down
-                    result['price'] = str(int(float(numbers[0])))
+                    # El prompt pide redondear hacia ARRIBA (16.67 -> 17)
+                    import math
+                    result['price'] = str(math.ceil(float(numbers[0])))
                 else:
                     result['price'] = '0'
                 current_field = 'price'

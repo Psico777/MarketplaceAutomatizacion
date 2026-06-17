@@ -129,10 +129,12 @@ class MarketplaceAutomation:
                 active.send_keys(Keys.TAB)
                 time.sleep(0.1)
             
-            # Add default tags + AI tags
-            default_tags = ['remate', 'oferta']
-            all_tags = default_tags + (tags[:6] if tags else [])
-            
+            # Solo los tags de la IA. NO forzar 'remate'/'oferta': el prompt de
+            # ai_analyzer los excluye a proposito (Facebook penaliza esas palabras
+            # y la descripcion ya comunica la oferta). BUG corregido.
+            all_tags = [t for t in (tags or [])[:10]
+                        if t and t.lower() not in ('remate', 'oferta')]
+
             for tag in all_tags:
                 active = self.driver.switch_to.active_element
                 active.send_keys(tag)
