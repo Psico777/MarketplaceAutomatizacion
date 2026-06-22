@@ -18,6 +18,8 @@ from modules.pdf_extractor import PDFImageExtractor
 from modules.ai_analyzer import AIImageAnalyzer
 from modules.facebook_auth import FacebookAuthenticator
 from modules.marketplace_automation import MarketplaceAutomation
+from modules.history import ListingHistory
+from modules.human import human_gap
 from config.settings import Config
 
 
@@ -27,11 +29,19 @@ class MarketplaceGUI:
         self.root.title("Facebook Marketplace Automation - LK")
         self.root.geometry("1400x900")
         self.root.configure(bg='#f0f0f0')
-        
+
         # Configuración
         self.config = Config()
         self.pdf_extractor = PDFImageExtractor()
-        self.ai_analyzer = AIImageAnalyzer(self.config.GEMINI_API_KEY)
+        # La IA solo se inicializa si hay API key (no crashea sin ella)
+        self.ai_analyzer = None
+        if self.config.GEMINI_API_KEY:
+            try:
+                self.ai_analyzer = AIImageAnalyzer(self.config.GEMINI_API_KEY, self.config.AI_MODEL_IMAGE, self.config.MAX_IMAGE_SIZE)
+            except Exception as e:
+                print(f"No se pudo iniciar la IA: {e}")
+        # Historial + logs
+        self.history = ListingHistory(self.config.HISTORY_FILE, self.config.LOGS_DIR)
         
         # Estado
         self.current_pdf = None
@@ -554,13 +564,14 @@ Estado: {"Listo para subir" if selected > 0 else "Sin selección"}
                 two_fa_secret=self.config.FACEBOOK_2FA_SECRET,
                 headless=self.config.HEADLESS,
                 implicit_wait=self.config.IMPLICIT_WAIT,
-                twofa_callback=self._twofa_callback
+                twofa_callback=self._twofa_callback,
+                user_data_dir=self.config.USER_DATA_DIR
             )
-            
+
             self.driver = auth.login()
-            
+
             if self.driver:
-                self.marketplace = MarketplaceAutomation(self.driver)
+                self.marketplace = MarketplaceAutomation(self.driver, self.config.HUMAN_MIN_DELAY, self.config.HUMAN_MAX_DELAY)
                 self.root.after(0, lambda: self.log("✓ Login exitoso"))
                 self.root.after(0, lambda: self.update_status("Conectado - Listo para subir"))
                 self.root.after(0, lambda: self._update_info())
@@ -597,22 +608,39 @@ Estado: {"Listo para subir" if selected > 0 else "Sin selección"}
         thread.start()
     
     def _upload_thread(self):
-        """Subir productos en thread separado"""
+        """Subir productos en thread separado (con limite diario, reintentos e historial)"""
+        if not self.ai_analyzer:
+            self.root.after(0, lambda: messagebox.showerror("Error", "Falta GEMINI_API_KEY en el .env"))
+            self.root.after(0, lambda: self.btn_upload_selected.config(state=tk.NORMAL))
+            return
+
         total = len(self.selected_images)
         success_count = 0
         failed_count = 0
-        
+
+        # Limite diario anti-baneo
+        remaining = self.history.remaining_today(self.config.MAX_LISTINGS_PER_DAY)
+        if remaining <= 0:
+            self.root.after(0, lambda: messagebox.showwarning(
+                "Límite diario", f"Ya alcanzaste el límite de {self.config.MAX_LISTINGS_PER_DAY} publicaciones hoy."))
+            self.root.after(0, lambda: self.btn_upload_selected.config(state=tk.NORMAL))
+            return
+        if total > remaining:
+            self.root.after(0, lambda r=remaining: self.log(f"⚠ Solo quedan {r} publicaciones permitidas hoy; se subiran esas."))
+
         self.root.after(0, lambda: self.progress_bar.config(maximum=total, value=0))
-        
+
         for idx, img_path in enumerate(self.selected_images, 1):
+            if success_count >= remaining:
+                self.root.after(0, lambda: self.log("⚠ Límite diario alcanzado, deteniendo."))
+                break
+
             page_num = self.extracted_images.index(img_path) + 1
-            
             self.root.after(0, lambda p=page_num: self.log(f"\n📦 Procesando página {p}..."))
-            
+
+            product_info = None
             try:
-                # Analizar con IA (con caché)
                 cache_key = os.path.basename(img_path)
-                
                 if cache_key in self.ai_cache:
                     self.root.after(0, lambda: self.log("  ⚡ Usando análisis cacheado"))
                     product_info = self.ai_cache[cache_key]
@@ -621,37 +649,53 @@ Estado: {"Listo para subir" if selected > 0 else "Sin selección"}
                     product_info = self.ai_analyzer.analyze_image_for_marketplace(img_path)
                     self.ai_cache[cache_key] = product_info
                     self.save_ai_cache()
-                
                 self.root.after(0, lambda t=product_info['title']: self.log(f"  ✓ {t}"))
-                
-                # Crear listing
-                self.root.after(0, lambda: self.log("  🚀 Creando listing..."))
-                success = self.marketplace.create_listing(
-                    title=product_info['title'],
-                    price=product_info['price'],
-                    description=product_info['description'],
-                    category="Electronics",
-                    condition="Nuevo",
-                    images=[img_path],
-                    tags=product_info['tags']
-                )
-                
-                if success:
-                    success_count += 1
-                    self.root.after(0, lambda: self.log("  ✓ ÉXITO"))
-                else:
-                    failed_count += 1
-                    self.root.after(0, lambda: self.log("  ✗ FALLÓ"))
-                
             except Exception as e:
                 failed_count += 1
-                self.root.after(0, lambda e=e: self.log(f"  ✗ Error: {e}"))
-            
-            # Actualizar progreso
+                self.history.record(img_path, '(analisis fallido)', '0', 'failed', error=e)
+                self.root.after(0, lambda e=e: self.log(f"  ✗ Error IA: {e}"))
+                continue
+
+            # Crear listing con reintentos
+            success = False
+            attempts = 0
+            for attempt in range(1, self.config.MAX_RETRIES + 2):
+                attempts = attempt
+                self.root.after(0, lambda a=attempt: self.log(f"  🚀 Publicando (intento {a})..."))
+                try:
+                    success = self.marketplace.create_listing(
+                        title=product_info['title'],
+                        price=product_info['price'],
+                        description=product_info['description'],
+                        category=self.config.DEFAULT_CATEGORY,
+                        condition=self.config.DEFAULT_CONDITION,
+                        images=[img_path],
+                        tags=product_info['tags'],
+                    )
+                except Exception as e:
+                    success = False
+                    self.root.after(0, lambda e=e: self.log(f"  ⚠ {e}"))
+                if success:
+                    break
+
+            if success:
+                success_count += 1
+                self.history.record(img_path, product_info['title'], product_info['price'], 'success', attempts=attempts)
+                self.root.after(0, lambda: self.log("  ✓ ÉXITO"))
+            else:
+                failed_count += 1
+                self.history.record(img_path, product_info['title'], product_info['price'], 'failed', attempts=attempts, error='create_listing devolvio False')
+                self.root.after(0, lambda: self.log("  ✗ FALLÓ"))
+
             self.root.after(0, lambda v=idx: self.progress_bar.config(value=v))
-            self.root.after(0, lambda s=success_count, f=failed_count, t=total: 
+            self.root.after(0, lambda s=success_count, f=failed_count, t=total:
                           self.progress_label.config(text=f"{s} exitosos, {f} fallidos de {t}"))
-        
+
+            # Pausa humana entre publicaciones (anti-baneo), salvo en la ultima
+            if idx < total and success_count < remaining:
+                self.root.after(0, lambda: self.log(f"  ⏳ Esperando antes de la siguiente..."))
+                human_gap(self.config.LISTING_MIN_GAP, self.config.LISTING_MAX_GAP)
+
         # Finalizar
         self.root.after(0, lambda: self.log(f"\n✓ Proceso completado: {success_count} éxitos, {failed_count} fallos"))
         self.root.after(0, lambda: self.update_status("Proceso completado"))

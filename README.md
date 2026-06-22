@@ -1,82 +1,73 @@
-# 🚀 Facebook Marketplace Automation
+# Facebook Marketplace Automation — LK
 
-Sistema automatizado con interfaz gráfica para subir productos a Facebook Marketplace.
+Sistema para publicar **tus propios productos** en Facebook Marketplace a partir de un PDF,
+con análisis por IA (Google Gemini). Disponible en dos modos:
 
-## ⚡ Características
+- 🖥️ **Escritorio** (Tkinter) — `python launch_gui.py`
+- 🌐 **Web** (FastAPI + React) — apartado `web/`, mismo estilo que el resto de productos LK
 
-- ✅ **Interfaz Gráfica**: Vista previa de imágenes, selección individual
-- ✅ **Análisis IA**: Google Gemini para descripciones automáticas
-- ✅ **Super Rápido**: Timeouts optimizados (0.1-0.2s)
-- ✅ **Caché Inteligente**: No re-analiza imágenes ya procesadas
-- ✅ **Progreso en Tiempo Real**: Barra de progreso y log detallado
+> ⚠️ Automatizar Facebook puede violar sus Términos. Úsalo **solo con tu cuenta y tus productos**, bajo tu responsabilidad.
 
-## 🚀 Uso Rápido
+## ✨ Características
 
-```bash
-# Lanzar GUI
-python launch_gui.py
-```
-
-### Pasos:
-1. 📄 **Cargar PDF** → Seleccionar tu PDF de productos
-2. ✓ **Marcar productos** → Checkbox de los que quieres subir
-3. 🔐 **Login Facebook** → Aprobar 2FA en celular
-4. 🚀 **Subir** → Click "Subir Seleccionados"
+- **PDF → imágenes** y selección visual de los productos a subir
+- **IA (Gemini)**: genera título, **precio unitario más bajo**, descripción y tags — ahora con **salida JSON estructurada** (más confiable)
+- **Posteo robusto**: detecta los campos por aria-label/placeholder con varios *fallbacks* (ya no depende de contar TABs fijos) y **categoría dinámica**
+- **Sesión persistente**: perfil de Chrome guardado → no re-loguear ni pedir 2FA cada vez
+- **Anti-baneo**: pausas humanas aleatorias, **límite diario** y espaciado entre publicaciones
+- **Historial + logs + reintentos**: registra qué se publicó / qué falló y reintenta automáticamente
 
 ## ⚙️ Configuración
 
-Editar `src/config/settings.py`:
+Copia `.env.example` a `.env` y complétalo (credenciales y **tu** API key de Gemini):
 
-```python
-FACEBOOK_EMAIL = "tu_email@example.com"
-FACEBOOK_PASSWORD = "tu_password"
-GEMINI_API_KEY = "tu_api_key_gemini"
+```bash
+cp .env.example .env
 ```
+
+Variables clave: `FACEBOOK_EMAIL`, `FACEBOOK_PASSWORD`, `GEMINI_API_KEY`,
+`MAX_LISTINGS_PER_DAY`, `LISTING_MIN_GAP`/`LISTING_MAX_GAP`, `DEFAULT_CATEGORY`.
+
+> 🔒 Nunca pongas claves en el código. El `.env` está en `.gitignore`.
+
+## 🖥️ Modo escritorio
+
+```bash
+pip install -r requirements.txt
+python launch_gui.py
+```
+
+1. Cargar PDF → 2. Marcar productos → 3. Login Facebook (aprueba 2FA en el celular) → 4. Subir.
+
+## 🌐 Modo web
+
+```bash
+# backend
+cd web/backend && pip install -r requirements.txt
+python main.py                 # http://localhost:8300
+
+# frontend (en otra terminal)
+cd web/frontend && npm install && npm run build   # se sirve en / desde el backend
+# o en desarrollo:  npm run dev                    # http://localhost:5175
+```
+
+Pestañas: **Productos** (subir PDF + análisis IA editable), **Publicar** (config + progreso en vivo por WebSocket), **Historial**.
 
 ## 📁 Estructura
 
 ```
-MarketplaceAutomatizacion/
-├── launch_gui.py              # 🚀 Launcher principal
-├── marketplace_gui.py         # 🖼️ Interfaz gráfica
+├── launch_gui.py / marketplace_gui.py   # modo escritorio
 ├── src/
-│   ├── modules/
-│   │   ├── ai_analyzer.py           # 🤖 Análisis con IA
-│   │   ├── marketplace_automation.py # ⚡ Subida optimizada
-│   │   ├── facebook_auth.py         # 🔐 Login 2FA
-│   │   └── pdf_extractor.py         # 📄 Extracción PDFs
-│   └── config/settings.py     # ⚙️ Configuración
-└── ai_analysis_cache.json     # 💾 Caché (auto-generado)
-```
-
-## ⚡ Optimizaciones
-
-- **Timeouts**: 0.1-0.2s (antes 5s)
-- **Velocidad**: ~30-40s por producto (antes 60s)
-- **Caché IA**: 95% más rápido en re-análisis
-- **Threading**: UI nunca se congela
-
-## 📋 Formato de Descripción
-
-```
-GENTE LLEGARON LOS [PRODUCTO] AL MEJOR PRECIO <3
-
-:) 1 unidad x 14 soles
-:D 3 unidades a mas x 9 soles (27 soles)
-
----
-(todas las compras por mayor salen a partir de la media docena)
-
-SOMOS LK <3
-Contacto: 995665397 WhatsApp
+│   ├── modules/  ai_analyzer · marketplace_automation · facebook_auth
+│   │             pdf_extractor · history · human
+│   └── config/settings.py
+└── web/
+    ├── backend/main.py        # FastAPI + WebSocket (reusa /src)
+    └── frontend/              # React + Vite (tema oscuro LK)
 ```
 
 ## 📞 Contacto
-
-**SOMOS LK** <3  
-WhatsApp: 995665397
+**SOMOS LK** <3 — WhatsApp: 995665397
 
 ---
-
-**Versión**: 2.0 Final  
-**Última actualización**: Nov 6, 2025
+**Versión**: 3.0 (núcleo robusto + apartado web)

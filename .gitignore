@@ -12,10 +12,20 @@ dist/
 build/
 *.log
 
-# Browser data
+# Sesion / datos locales del usuario
 browser_data/
 screenshots/
 temp_images/
+logs/
+listings_history.json
+ai_analysis_cache.json
+upload.pdf
+
+# Web frontend
+node_modules/
+web/frontend/node_modules/
+web/frontend/dist/
+.vite/
 
 # IDE
 .vscode/
