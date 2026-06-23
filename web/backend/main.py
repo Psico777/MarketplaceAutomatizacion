@@ -50,6 +50,8 @@ TEMP_DIR.mkdir(exist_ok=True)
 (WORK / "screenshots").mkdir(exist_ok=True)
 
 cfg = Config()
+# Modo demo: para el showcase publico (no abre Chrome ni publica de verdad)
+DEMO_MODE = os.getenv("MARKETPLACE_DEMO", "0") == "1"
 extractor = PDFImageExtractor(temp_dir=str(TEMP_DIR))
 history = ListingHistory(str(WORK / "listings_history.json"), str(WORK / "logs"))
 analyzer = None
@@ -95,9 +97,29 @@ AI_CACHE = _load_cache()
 def health():
     return {
         "status": "ok",
-        "ai_ready": analyzer is not None,
+        "demo": DEMO_MODE,
+        "ai_ready": analyzer is not None or DEMO_MODE,
         "logged_in": SESSION["logged_in"],
     }
+
+
+# Datos simulados para el modo demo
+_DEMO_PRODUCTS = [
+    {"title": "Audifonos Bluetooth TWS Pro", "price": "17",
+     "description": "GENTE LLEGARON LOS AUDIFONOS BLUETOOTH AL MEJOR PRECIO <3\n\n:) 1 unidad x 25 soles\n:D 3 unidades a mas x 17 soles (51 soles)\n\nSOMOS LK <3",
+     "tags": ["audifonos", "bluetooth", "tws", "inalambrico", "musica", "gaming", "manos libres", "tecnologia"]},
+    {"title": "Set de Ollas Antiadherentes 8pz", "price": "9",
+     "description": "GENTE LLEGARON LAS OLLAS AL MEJOR PRECIO <3\n\n:) 1 unidad x 14 soles\n:D 3 unidades a mas x 9 soles (27 soles)\n\nSOMOS LK <3",
+     "tags": ["ollas", "cocina", "antiadherente", "hogar", "set", "menaje", "utensilios", "calidad"]},
+    {"title": "Mochila Escolar Impermeable", "price": "12",
+     "description": "GENTE LLEGARON LAS MOCHILAS AL MEJOR PRECIO <3\n\n:) 1 unidad x 20 soles\n:D 3 unidades a mas x 12 soles (36 soles)\n\nSOMOS LK <3",
+     "tags": ["mochila", "escolar", "impermeable", "viaje", "estudiantes", "resistente", "espaciosa", "moda"]},
+]
+
+
+def _demo_info(filename):
+    idx = abs(hash(filename)) % len(_DEMO_PRODUCTS)
+    return dict(_DEMO_PRODUCTS[idx])
 
 
 @app.get("/api/config")
@@ -168,9 +190,14 @@ def get_image(filename: str):
 # ======================================================================
 @app.post("/api/analyze")
 async def analyze(payload: dict):
+    fn = os.path.basename(payload.get("filename", ""))
+    if DEMO_MODE:
+        await asyncio.sleep(0.8)  # simular el tiempo de la IA
+        info = _demo_info(fn)
+        AI_CACHE[fn] = info
+        return {"cached": False, "demo": True, **info}
     if not analyzer:
         raise HTTPException(400, "Falta GEMINI_API_KEY en el .env")
-    fn = os.path.basename(payload.get("filename", ""))
     fp = TEMP_DIR / fn
     if not fp.exists():
         raise HTTPException(404, "imagen no encontrada")
@@ -221,6 +248,9 @@ def _do_login():
 
 @app.post("/api/login")
 async def login():
+    if DEMO_MODE:
+        SESSION["logged_in"] = True
+        return {"status": "demo_conectado"}
     if SESSION["logged_in"]:
         return {"status": "ya_conectado"}
     if SESSION["logging_in"]:
@@ -259,8 +289,33 @@ def get_history():
 # ======================================================================
 def _publish_worker(items, evq: "queue.Queue"):
     """Corre en un thread; empuja eventos de progreso a la cola."""
+    import time as _t
     def emit(**ev):
         evq.put(ev)
+
+    # ---- MODO DEMO: simula la publicacion sin Selenium ni Facebook ----
+    if DEMO_MODE:
+        total = len(items)
+        emit(type="start", total=total, remaining_today=cfg.MAX_LISTINGS_PER_DAY)
+        ok = 0
+        for i, item in enumerate(items, 1):
+            fn = os.path.basename(item.get("filename", f"item{i}"))
+            info = {"title": item.get("title") or _demo_info(fn)["title"], "price": item.get("price") or "15"}
+            emit(type="item_start", page=i, filename=fn)
+            emit(type="log", message=f"[DEMO] Analizando {fn}...")
+            _t.sleep(0.6)
+            emit(type="log", message=f"[DEMO] Publicando '{info['title']}'...")
+            _t.sleep(1.0)
+            ok += 1
+            history.record(fn, info["title"], str(info["price"]), "success", attempts=1)
+            emit(type="item_done", page=i, status="success", title=info["title"], price=info["price"])
+            emit(type="progress", done=i, total=total, ok=ok, fail=0)
+            if i < total:
+                emit(type="waiting", seconds=2)
+                _t.sleep(2)
+        emit(type="done", ok=ok, fail=0, total=total)
+        evq.put(None)
+        return
 
     if not SESSION["logged_in"] or not SESSION["marketplace"]:
         emit(type="error", message="No hay sesion de Facebook. Inicia sesion primero.")

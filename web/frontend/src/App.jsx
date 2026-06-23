@@ -69,6 +69,21 @@ export default function App() {
 
   const toggle = (idx) => setItems(arr => arr.map((x, i) => i === idx ? { ...x, selected: !x.selected } : x))
 
+  // ---------- Demo ----------
+  const svgPlaceholder = (txt) => {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><rect width='100%' height='100%' fill='#0c1326'/><rect x='8' y='8' width='284' height='184' rx='10' fill='none' stroke='#243152'/><text x='50%' y='50%' fill='#00d4ff' font-family='Segoe UI' font-size='16' text-anchor='middle' dominant-baseline='middle'>${txt}</text></svg>`
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+  }
+  const demoSamples = [
+    { title: 'Audifonos Bluetooth TWS Pro', price: '17', description: 'GENTE LLEGARON LOS AUDIFONOS BLUETOOTH AL MEJOR PRECIO <3\n\n:) 1 unidad x 25 soles\n:D 3 unidades a mas x 17 soles (51 soles)\n\nSOMOS LK <3', tags: ['audifonos', 'bluetooth', 'tws', 'inalambrico', 'musica', 'gaming'] },
+    { title: 'Set de Ollas Antiadherentes 8pz', price: '9', description: 'GENTE LLEGARON LAS OLLAS AL MEJOR PRECIO <3\n\n:) 1 unidad x 14 soles\n:D 3 unidades a mas x 9 soles (27 soles)\n\nSOMOS LK <3', tags: ['ollas', 'cocina', 'antiadherente', 'hogar', 'set', 'menaje'] },
+    { title: 'Mochila Escolar Impermeable', price: '12', description: 'GENTE LLEGARON LAS MOCHILAS AL MEJOR PRECIO <3\n\n:) 1 unidad x 20 soles\n:D 3 unidades a mas x 12 soles (36 soles)\n\nSOMOS LK <3', tags: ['mochila', 'escolar', 'impermeable', 'viaje', 'resistente'] },
+  ]
+  const demoLoad = () => {
+    setItems(demoSamples.map((s, i) => ({ page: i + 1, filename: `demo_${i + 1}.png`, url: svgPlaceholder('Producto ' + (i + 1)), info: { ...s }, selected: true })))
+    log('Productos de ejemplo cargados (modo demo)')
+  }
+
   // ---------- Login ----------
   const login = async () => { log('Iniciando sesion en Facebook...'); await api('/api/login', { method: 'POST' }); refreshStatus() }
   const confirm2fa = async () => { await api('/api/2fa-confirm', { method: 'POST' }); log('2FA confirmado'); refreshStatus() }
@@ -120,6 +135,8 @@ export default function App() {
         </div>
       </header>
 
+      {health.demo && <div className="demo-banner">🟡 MODO DEMO — interfaz navegable. Login, análisis y publicación son <b>simulados</b> (no toca Facebook). Pulsa <b>"Cargar ejemplo"</b> para probar el flujo completo.</div>}
+
       <nav className="tabs">
         {['productos', 'publicar', 'historial'].map(t =>
           <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>{t.toUpperCase()}</button>)}
@@ -130,6 +147,7 @@ export default function App() {
           <section>
             <div className="toolbar">
               <label className="btn">📄 Cargar PDF<input type="file" accept="application/pdf" hidden onChange={uploadPdf} /></label>
+              {health.demo && <button className="btn ghost" onClick={demoLoad}>✨ Cargar ejemplo</button>}
               <button className="btn ghost" disabled={!items.length || busy} onClick={analyzeAll}>🤖 Analizar todo (IA)</button>
               <button className="btn ghost" disabled={!items.length} onClick={() => setItems(a => a.map(x => ({ ...x, selected: true })))}>Seleccionar todo</button>
               <span className="muted">{items.length} paginas · {selCount} seleccionadas</span>

@@ -26,6 +26,7 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Segoe 
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.off { color: var(--off); }
 
+.demo-banner { background: rgba(245,158,11,.12); border: 1px solid var(--warn); color: #ffd98a; padding: 10px 16px; border-radius: 10px; margin-top: 14px; font-size: 13px; }
 .tabs { display: flex; gap: 8px; margin: 18px 0; }
 .tab { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 8px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; letter-spacing: .5px; }
 .tab.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
