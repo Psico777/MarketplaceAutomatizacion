@@ -44,6 +44,13 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Segoe 
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
 .muted { color: var(--muted); font-size: 13px; }
 
+.dropzone { display: flex; align-items: center; gap: 10px; justify-content: center; text-align: center;
+  border: 1px dashed var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+  color: var(--muted); font-size: 13px; background: rgba(255,255,255,.01); transition: .2s; }
+.dropzone b { color: var(--txt); font-weight: 600; }
+.dropzone svg { color: var(--accent); flex: none; }
+.dropzone.over { border-color: var(--accent); color: var(--txt); background: rgba(0,212,255,.06); }
+
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
 .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }

@@ -14,14 +14,19 @@ IMPORTANTE: automatizar Facebook puede violar sus Terminos. Usar solo con
 cuenta y productos propios, bajo tu responsabilidad.
 """
 import os
+import io
 import sys
 import json
+import uuid
 import queue
 import asyncio
+import datetime
 import threading
 from pathlib import Path
+from typing import List
+from collections import defaultdict
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -89,6 +94,34 @@ def _save_cache(cache):
 
 AI_CACHE = _load_cache()
 
+# --- guard de uso para /api/analyze (protege la cuota gratuita de Gemini) ---
+# El endpoint es publico (demo sin auth); limitamos analisis reales por dia.
+ANALYZE_DAILY_GLOBAL = int(os.getenv("ANALYZE_DAILY_GLOBAL", "200"))
+ANALYZE_DAILY_PER_IP = int(os.getenv("ANALYZE_DAILY_PER_IP", "30"))
+_rate = {"date": None, "global": 0, "by_ip": defaultdict(int)}
+
+
+def _rate_reset_if_needed():
+    today = datetime.date.today().isoformat()
+    if _rate["date"] != today:
+        _rate["date"] = today
+        _rate["global"] = 0
+        _rate["by_ip"] = defaultdict(int)
+
+
+def _rate_check(ip):
+    _rate_reset_if_needed()
+    if _rate["global"] >= ANALYZE_DAILY_GLOBAL:
+        return False, "Limite diario global de analisis IA alcanzado. Intenta de nuevo manana."
+    if _rate["by_ip"][ip] >= ANALYZE_DAILY_PER_IP:
+        return False, f"Alcanzaste el limite de {ANALYZE_DAILY_PER_IP} analisis IA por dia para esta sesion."
+    return True, None
+
+
+def _rate_bump(ip):
+    _rate["global"] += 1
+    _rate["by_ip"][ip] += 1
+
 
 # ======================================================================
 #  Salud / configuracion
@@ -99,6 +132,7 @@ def health():
         "status": "ok",
         "demo": DEMO_MODE,
         "ai_ready": analyzer is not None or DEMO_MODE,
+        "ai_real": analyzer is not None,   # IA de verdad (no datos simulados)
         "logged_in": SESSION["logged_in"],
     }
 
@@ -176,6 +210,28 @@ async def upload_pdf(file: UploadFile = File(...)):
     return {"count": len(items), "items": items}
 
 
+@app.post("/api/upload-images")
+async def upload_images(files: List[UploadFile] = File(...)):
+    """Sube fotos directamente (sin PDF): seleccion multiple, pegado o arrastrar.
+    Cada imagen se normaliza a PNG y se agrega al set de trabajo."""
+    saved = []
+    for f in files:
+        ct = (f.content_type or "").lower()
+        if not ct.startswith("image/"):
+            continue
+        try:
+            data = await f.read()
+            img = Image.open(io.BytesIO(data)).convert("RGB")
+        except Exception:
+            continue
+        fn = f"img_{uuid.uuid4().hex[:10]}.png"
+        img.save(TEMP_DIR / fn, "PNG")
+        saved.append({"filename": fn, "url": f"/api/img/{fn}"})
+    if not saved:
+        raise HTTPException(400, "No se recibieron imagenes validas (sube JPG/PNG)")
+    return {"count": len(saved), "items": saved}
+
+
 @app.get("/api/img/{filename}")
 def get_image(filename: str):
     safe = os.path.basename(filename)
@@ -189,24 +245,32 @@ def get_image(filename: str):
 #  Analisis IA
 # ======================================================================
 @app.post("/api/analyze")
-async def analyze(payload: dict):
+async def analyze(payload: dict, request: Request):
     fn = os.path.basename(payload.get("filename", ""))
+    # ---- IA REAL: si hay analyzer (GEMINI_API_KEY presente) se analiza de verdad,
+    #      aunque el resto de la demo (publicacion) siga simulado. ----
+    if analyzer:
+        fp = TEMP_DIR / fn
+        if not fp.exists():
+            raise HTTPException(404, "imagen no encontrada")
+        if fn in AI_CACHE and not payload.get("force"):
+            return {"cached": True, "real": True, **AI_CACHE[fn]}
+        ip = request.client.host if request.client else "?"
+        ok, msg = _rate_check(ip)
+        if not ok:
+            raise HTTPException(429, msg)
+        info = await asyncio.to_thread(analyzer.analyze_image_for_marketplace, str(fp))
+        _rate_bump(ip)
+        AI_CACHE[fn] = info
+        _save_cache(AI_CACHE)
+        return {"cached": False, "real": True, **info}
+    # ---- Fallback simulado (sin key) ----
     if DEMO_MODE:
         await asyncio.sleep(0.8)  # simular el tiempo de la IA
         info = _demo_info(fn)
         AI_CACHE[fn] = info
         return {"cached": False, "demo": True, **info}
-    if not analyzer:
-        raise HTTPException(400, "Falta GEMINI_API_KEY en el .env")
-    fp = TEMP_DIR / fn
-    if not fp.exists():
-        raise HTTPException(404, "imagen no encontrada")
-    if fn in AI_CACHE and not payload.get("force"):
-        return {"cached": True, **AI_CACHE[fn]}
-    info = await asyncio.to_thread(analyzer.analyze_image_for_marketplace, str(fp))
-    AI_CACHE[fn] = info
-    _save_cache(AI_CACHE)
-    return {"cached": False, **info}
+    raise HTTPException(400, "Falta GEMINI_API_KEY en el .env")
 
 
 # ======================================================================
@@ -447,10 +511,12 @@ if DIST.exists():
 
     @app.get("/{full_path:path}")
     def spa(full_path: str):
-        fp = (DIST / full_path)
-        if fp.is_file():
+        # Evita path traversal: la ruta resuelta debe quedar dentro de DIST.
+        dist_root = DIST.resolve()
+        fp = (dist_root / full_path).resolve()
+        if fp.is_file() and dist_root in fp.parents:
             return FileResponse(fp)
-        return FileResponse(DIST / "index.html")
+        return FileResponse(dist_root / "index.html")
 else:
     @app.get("/")
     def no_build():

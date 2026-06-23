@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { IcGrid, IcFile, IcSparkle, IcCpu, IcRefresh, IcSend } from './Icons'
+import { IcGrid, IcFile, IcSparkle, IcCpu, IcRefresh, IcSend, IcImage, IcClipboard } from './Icons'
 
 const api = (p, opts) => fetch(p, opts).then(r => r.json())
 
@@ -13,6 +13,7 @@ export default function App() {
   const [progress, setProgress] = useState(null)  // {done,total,ok,fail}
   const [logLines, setLogLines] = useState([])
   const [history, setHistory] = useState({ summary: {}, records: [] })
+  const [drag, setDrag] = useState(false)
   const wsRef = useRef(null)
   const logRef = useRef(null)
 
@@ -43,6 +44,48 @@ export default function App() {
       log(`Extraidas ${res.count} paginas`)
     } catch (err) { log('Error subiendo PDF: ' + err) }
     setBusy(false)
+  }
+
+  // ---------- Imagenes (subir / pegar / arrastrar) ----------
+  const addImages = async (fileList) => {
+    const files = Array.from(fileList || []).filter(f => f.type && f.type.startsWith('image/'))
+    if (!files.length) return
+    setBusy(true); log(`Subiendo ${files.length} foto(s)...`)
+    const fd = new FormData()
+    files.forEach(f => fd.append('files', f))
+    try {
+      const res = await fetch('/api/upload-images', { method: 'POST', body: fd }).then(r => r.json())
+      if (res.detail) { log('Error: ' + res.detail) }
+      else {
+        setItems(arr => {
+          const base = arr.length
+          const add = (res.items || []).map((it, i) => ({ ...it, page: base + i + 1, info: null, selected: false }))
+          return [...arr, ...add]
+        })
+        log(`Agregadas ${res.count} foto(s)`)
+      }
+    } catch (e) { log('Error subiendo fotos: ' + e) }
+    setBusy(false)
+  }
+
+  // pegar imagenes con Ctrl+V en cualquier parte de la app
+  useEffect(() => {
+    const onPaste = (e) => {
+      const items = e.clipboardData && e.clipboardData.items
+      if (!items) return
+      const imgs = []
+      for (const it of items) {
+        if (it.type && it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) imgs.push(f) }
+      }
+      if (imgs.length) { e.preventDefault(); addImages(imgs) }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [])
+
+  const onDrop = (e) => {
+    e.preventDefault(); setDrag(false)
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addImages(e.dataTransfer.files)
   }
 
   // ---------- IA ----------
@@ -136,7 +179,13 @@ export default function App() {
         </div>
       </header>
 
-      {health.demo && <div className="demo-banner">MODO DEMO — interfaz navegable. Login, análisis y publicación son <b>simulados</b> (no toca Facebook). Pulsa <b>"Cargar ejemplo"</b> para probar el flujo completo.</div>}
+      {health.demo && (
+        <div className="demo-banner">
+          {health.ai_real
+            ? <>MODO DEMO — el <b>análisis con IA es REAL</b> (Gemini analiza tus imágenes y genera título, precio y descripción). Solo la <b>publicación a Facebook está simulada</b> por seguridad. Sube un PDF o tus fotos y pulsa <b>Analizar</b>.</>
+            : <>MODO DEMO — interfaz navegable. Login, análisis y publicación son <b>simulados</b> (no toca Facebook). Pulsa <b>"Cargar ejemplo"</b> para probar el flujo completo.</>}
+        </div>
+      )}
 
       <nav className="tabs">
         {['productos', 'publicar', 'historial'].map(t =>
@@ -148,17 +197,30 @@ export default function App() {
           <section>
             <div className="toolbar">
               <label className="btn"><IcFile /> Cargar PDF<input type="file" accept="application/pdf" hidden onChange={uploadPdf} /></label>
+              <label className="btn"><IcImage /> Cargar fotos<input type="file" accept="image/*" multiple hidden onChange={e => { addImages(e.target.files); e.target.value = '' }} /></label>
               {health.demo && <button className="btn ghost" onClick={demoLoad}><IcSparkle /> Cargar ejemplo</button>}
               <button className="btn ghost" disabled={!items.length || busy} onClick={analyzeAll}><IcCpu /> Analizar todo (IA)</button>
               <button className="btn ghost" disabled={!items.length} onClick={() => setItems(a => a.map(x => ({ ...x, selected: true })))}>Seleccionar todo</button>
-              <span className="muted">{items.length} paginas · {selCount} seleccionadas</span>
+              {items.length > 0 && <button className="btn ghost" onClick={() => setItems([])}>Limpiar</button>}
+              <span className="muted">{items.length} elementos · {selCount} seleccionados</span>
             </div>
+
+            <div
+              className={'dropzone' + (drag ? ' over' : '')}
+              onDragOver={e => { e.preventDefault(); setDrag(true) }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={onDrop}
+            >
+              <IcClipboard size={18} />
+              <span>Arrastra imágenes aquí, o <b>pega con Ctrl+V</b>, o usa <b>Cargar fotos</b> / <b>Cargar PDF</b>.</span>
+            </div>
+
             <div className="grid">
               {items.map((it, idx) => (
                 <div key={it.filename} className={'card' + (it.selected ? ' sel' : '')}>
                   <div className="card-top">
                     <input type="checkbox" checked={it.selected} onChange={() => toggle(idx)} />
-                    <span>Pag. {it.page}</span>
+                    <span>#{it.page}</span>
                   </div>
                   <img src={it.url} alt={it.filename} />
                   {!it.info
