@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { IcGrid, IcFile, IcSparkle, IcCpu, IcRefresh, IcSend } from './Icons'
 
 const api = (p, opts) => fetch(p, opts).then(r => r.json())
 
@@ -106,11 +107,11 @@ export default function App() {
     ws.onopen = () => ws.send(JSON.stringify({ items: sel.map(s => ({ filename: s.filename, ...(s.info || {}) })) }))
     ws.onmessage = (ev) => {
       const d = JSON.parse(ev.data)
-      if (d.type === 'log' || d.type === 'error') log((d.type === 'error' ? '⛔ ' : '') + d.message)
+      if (d.type === 'log' || d.type === 'error') log((d.type === 'error' ? '[!] ' : '') + d.message)
       else if (d.type === 'start') log(`Iniciando: ${d.total} productos (quedan hoy: ${d.remaining_today})`)
       else if (d.type === 'item_start') log(`\n[${d.page}] ${d.filename}`)
       else if (d.type === 'waiting') log(`Esperando ~${d.seconds}s (anti-baneo)...`)
-      else if (d.type === 'item_done') log(`  ${d.status === 'success' ? '✓' : '✗'} ${d.title || ''}`)
+      else if (d.type === 'item_done') log(`  ${d.status === 'success' ? '[OK]' : '[x]'} ${d.title || ''}`)
       else if (d.type === 'progress') setProgress({ done: d.done, total: d.total, ok: d.ok, fail: d.fail })
       else if (d.type === 'done') { log(`\nListo: ${d.ok} ok, ${d.fail} fallos`); setBusy(false); loadHistory() }
     }
@@ -126,7 +127,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="hdr">
-        <div className="brand"><span className="logo">◧</span> Marketplace <b>Automation</b></div>
+        <div className="brand"><span className="logo"><IcGrid size={20} /></span> Marketplace <b>Automation</b></div>
         <div className="status">
           <Badge on={health.ai_ready} label="IA" />
           <Badge on={session.logged_in} label="Facebook" />
@@ -135,7 +136,7 @@ export default function App() {
         </div>
       </header>
 
-      {health.demo && <div className="demo-banner">🟡 MODO DEMO — interfaz navegable. Login, análisis y publicación son <b>simulados</b> (no toca Facebook). Pulsa <b>"Cargar ejemplo"</b> para probar el flujo completo.</div>}
+      {health.demo && <div className="demo-banner">MODO DEMO — interfaz navegable. Login, análisis y publicación son <b>simulados</b> (no toca Facebook). Pulsa <b>"Cargar ejemplo"</b> para probar el flujo completo.</div>}
 
       <nav className="tabs">
         {['productos', 'publicar', 'historial'].map(t =>
@@ -146,9 +147,9 @@ export default function App() {
         {tab === 'productos' && (
           <section>
             <div className="toolbar">
-              <label className="btn">📄 Cargar PDF<input type="file" accept="application/pdf" hidden onChange={uploadPdf} /></label>
-              {health.demo && <button className="btn ghost" onClick={demoLoad}>✨ Cargar ejemplo</button>}
-              <button className="btn ghost" disabled={!items.length || busy} onClick={analyzeAll}>🤖 Analizar todo (IA)</button>
+              <label className="btn"><IcFile /> Cargar PDF<input type="file" accept="application/pdf" hidden onChange={uploadPdf} /></label>
+              {health.demo && <button className="btn ghost" onClick={demoLoad}><IcSparkle /> Cargar ejemplo</button>}
+              <button className="btn ghost" disabled={!items.length || busy} onClick={analyzeAll}><IcCpu /> Analizar todo (IA)</button>
               <button className="btn ghost" disabled={!items.length} onClick={() => setItems(a => a.map(x => ({ ...x, selected: true })))}>Seleccionar todo</button>
               <span className="muted">{items.length} paginas · {selCount} seleccionadas</span>
             </div>
@@ -161,13 +162,13 @@ export default function App() {
                   </div>
                   <img src={it.url} alt={it.filename} />
                   {!it.info
-                    ? <button className="btn xs" disabled={it.analyzing} onClick={() => analyze(idx)}>{it.analyzing ? 'Analizando...' : '🤖 Analizar'}</button>
+                    ? <button className="btn xs" disabled={it.analyzing} onClick={() => analyze(idx)}>{it.analyzing ? 'Analizando...' : <><IcCpu size={14} /> Analizar</>}</button>
                     : <div className="info">
                         <input value={it.info.title} onChange={e => editInfo(idx, 'title', e.target.value)} placeholder="Titulo" />
                         <input value={it.info.price} onChange={e => editInfo(idx, 'price', e.target.value)} placeholder="Precio" />
                         <textarea value={it.info.description} onChange={e => editInfo(idx, 'description', e.target.value)} rows={4} />
                         <div className="tags">{(it.info.tags || []).map((t, i) => <span key={i} className="tag">{t}</span>)}</div>
-                        <button className="btn xs ghost" onClick={() => analyze(idx, true)}>↻ Re-analizar</button>
+                        <button className="btn xs ghost" onClick={() => analyze(idx, true)}><IcRefresh size={14} /> Re-analizar</button>
                       </div>}
                 </div>
               ))}
@@ -191,7 +192,7 @@ export default function App() {
                 </div>
               </Field>
               <p className="muted">Quedan hoy: <b>{cfg.remaining_today}</b> publicaciones</p>
-              <button className="btn big" disabled={busy || !selCount} onClick={publish}>🚀 Publicar {selCount} seleccionados</button>
+              <button className="btn big" disabled={busy || !selCount} onClick={publish}><IcSend /> Publicar {selCount} seleccionados</button>
               {progress && <div className="bar"><div style={{ width: `${(progress.done / progress.total) * 100}%` }} /></div>}
               {progress && <p className="muted">{progress.ok} ok · {progress.fail} fallos · {progress.done}/{progress.total}</p>}
             </div>
