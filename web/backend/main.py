@@ -216,12 +216,12 @@ async def upload_images(files: List[UploadFile] = File(...)):
     Cada imagen se normaliza a PNG y se agrega al set de trabajo."""
     saved = []
     for f in files:
-        ct = (f.content_type or "").lower()
-        if not ct.startswith("image/"):
-            continue
+        # No confiamos en el content-type del cliente: validamos abriendo con PIL.
         try:
             data = await f.read()
-            img = Image.open(io.BytesIO(data)).convert("RGB")
+            img = Image.open(io.BytesIO(data))
+            img.load()
+            img = img.convert("RGB")
         except Exception:
             continue
         fn = f"img_{uuid.uuid4().hex[:10]}.png"
