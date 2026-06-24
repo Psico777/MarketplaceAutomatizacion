@@ -3,6 +3,13 @@ import { IcGrid, IcFile, IcSparkle, IcCpu, IcRefresh, IcSend, IcImage, IcClipboa
 
 const api = (p, opts) => fetch(p, opts).then(r => r.json())
 
+// account_id = sha256(licencia)[:16], identico al contrato (seccion 0).
+async function accountIdFor(key) {
+  const data = new TextEncoder().encode((key || '').trim())
+  const buf = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
+}
+
 export default function App() {
   const [tab, setTab] = useState('productos')
   const [health, setHealth] = useState({})
@@ -14,6 +21,9 @@ export default function App() {
   const [logLines, setLogLines] = useState([])
   const [history, setHistory] = useState({ summary: {}, records: [] })
   const [drag, setDrag] = useState(false)
+  const [licenseKey, setLicenseKey] = useState(() => localStorage.getItem('eleka_license') || '')
+  const [accountId, setAccountId] = useState('')
+  const [agentOnline, setAgentOnline] = useState(false)
   const wsRef = useRef(null)
   const logRef = useRef(null)
 
@@ -162,6 +172,67 @@ export default function App() {
     ws.onerror = () => { log('Error de conexion WS'); setBusy(false) }
   }
 
+  // ---------- Publicar via AGENTE (.exe del cliente, a traves del relay) ----------
+  // Persistimos la licencia y derivamos el account_id en el navegador.
+  useEffect(() => {
+    localStorage.setItem('eleka_license', licenseKey)
+    let stop = false
+    if (!licenseKey.trim()) { setAccountId(''); setAgentOnline(false); return }
+    accountIdFor(licenseKey).then(id => { if (!stop) setAccountId(id) })
+    return () => { stop = true }
+  }, [licenseKey])
+
+  // Sondeamos si el agente de esta cuenta esta conectado al cloud.
+  useEffect(() => {
+    if (!accountId) return
+    const check = async () => {
+      try { const r = await api(`/api/agent/online?account_id=${accountId}`); setAgentOnline(!!r.online) }
+      catch { /* ignorar */ }
+    }
+    check(); const t = setInterval(check, 4000); return () => clearInterval(t)
+  }, [accountId])
+
+  const publishViaAgent = async () => {
+    const sel = items.filter(x => x.selected)
+    if (!sel.length) { log('No hay productos seleccionados'); return }
+    if (!accountId) { log('Introduce tu clave de licencia'); return }
+    setBusy(true); setProgress({ done: 0, total: sel.length, ok: 0, fail: 0 })
+    let ok = 0, fail = 0
+    try {
+      const payload = {
+        account_id: accountId,
+        items: sel.map(s => ({
+          page: s.page, title: s.info?.title || '', price: s.info?.price || '',
+          description: s.info?.description || '', tags: s.info?.tags || [], image_files: [s.filename],
+        })),
+        settings: { category: cfg.default_category, condition: cfg.default_condition },
+      }
+      const res = await api('/api/jobs/publish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      if (res.detail) { log('[!] ' + res.detail); setBusy(false); return }
+      log(`Job ${res.job_id} -> ${res.status}` + (res.status === 'queued' ? ' (agente offline; se enviara al conectar)' : ''))
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      const ws = new WebSocket(`${proto}://${location.host}/api/jobs/ws/${res.job_id}`)
+      wsRef.current = ws
+      ws.onmessage = (ev) => {
+        const d = JSON.parse(ev.data)
+        if (d.type === 'subscribed') log(`Suscrito al job (estado: ${d.status})`)
+        else if (d.type === 'job_accepted') log('El agente acepto el job')
+        else if (d.type === 'status') log(`Agente: ${d.state}`)
+        else if (d.type === 'progress') log((d.level === 'error' ? '[!] ' : '  ') + (d.message || ''))
+        else if (d.type === 'item_done') {
+          d.status === 'success' ? ok++ : fail++
+          log(`  ${d.status === 'success' ? '[OK]' : '[x]'} ${d.title || ''}` + (d.error ? ` (${d.error})` : ''))
+          setProgress({ done: ok + fail, total: sel.length, ok, fail })
+        }
+        else if (d.type === 'job_done') { log(`\nListo: ${d.ok} ok, ${d.fail} fallos`); setBusy(false); try { ws.close() } catch {} loadHistory() }
+        else if (d.type === 'error') { log('[!] ' + d.message); setBusy(false) }
+      }
+      ws.onerror = () => { log('Error de conexion WS del job'); setBusy(false) }
+    } catch (e) { log('Error publicando: ' + e); setBusy(false) }
+  }
+
   const loadHistory = async () => setHistory(await api('/api/history'))
   useEffect(() => { if (tab === 'historial') loadHistory() }, [tab])
 
@@ -241,6 +312,21 @@ export default function App() {
         {tab === 'publicar' && cfg && (
           <section className="pub">
             <div className="cfg">
+              <div className="agent-box">
+                <h3>Publicación real (tu agente .exe)</h3>
+                <Field label="Clave de licencia">
+                  <input value={licenseKey} onChange={e => setLicenseKey(e.target.value)} placeholder="ELEKA-MKT-XXXX-XXXX-XXXX" />
+                </Field>
+                <p className="muted">
+                  Agente: <span className={agentOnline ? 'dot-on' : 'dot-off'}>{agentOnline ? 'CONECTADO' : 'desconectado'}</span>
+                  {accountId && <> · cuenta <code>{accountId}</code></>}
+                </p>
+                <button className="btn big" disabled={busy || !selCount || !accountId} onClick={publishViaAgent}>
+                  <IcSend /> Publicar {selCount} con mi agente
+                </button>
+                {!agentOnline && accountId && <p className="muted">Abre <b>ElekaMarketplaceAgent.exe</b> en tu PC con esta licencia. Si está offline, el job queda en cola y se enviará al conectar.</p>}
+              </div>
+
               <h3>Configuracion</h3>
               <Field label="Categoria"><input value={cfg.default_category} onChange={e => saveCfg({ default_category: e.target.value })} /></Field>
               <Field label="Condicion"><input value={cfg.default_condition} onChange={e => saveCfg({ default_condition: e.target.value })} /></Field>
@@ -254,7 +340,7 @@ export default function App() {
                 </div>
               </Field>
               <p className="muted">Quedan hoy: <b>{cfg.remaining_today}</b> publicaciones</p>
-              <button className="btn big" disabled={busy || !selCount} onClick={publish}><IcSend /> Publicar {selCount} seleccionados</button>
+              <button className="btn big ghost" disabled={busy || !selCount} onClick={publish}><IcSend /> Publicar (modo servidor / demo)</button>
               {progress && <div className="bar"><div style={{ width: `${(progress.done / progress.total) * 100}%` }} /></div>}
               {progress && <p className="muted">{progress.ok} ok · {progress.fail} fallos · {progress.done}/{progress.total}</p>}
             </div>
