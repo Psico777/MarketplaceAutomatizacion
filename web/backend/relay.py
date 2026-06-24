@@ -214,8 +214,15 @@ async def agent_ws(ws: WebSocket):
             # Eventos de progreso del job -> reenviar a los dashboards suscritos.
             if mtype in _FORWARD_TYPES:
                 job_id = msg.get("job_id")
-                if mtype == "job_done" and job_id in JOBS:
-                    JOBS[job_id]["status"] = "done"
+                if job_id and job_id in JOBS:
+                    if mtype == "job_done":
+                        JOBS[job_id]["status"] = "done"
+                    # Guardar el evento para reproducirlo a suscriptores tardios
+                    # (p.ej. el dashboard que se suscribe tras terminar el job).
+                    evs = JOBS[job_id].setdefault("events", [])
+                    evs.append(msg)
+                    if len(evs) > 200:
+                        del evs[:len(evs) - 200]
                 if job_id:
                     await _forward_to_subs(job_id, msg)
                 continue
@@ -251,6 +258,7 @@ async def publish_job(payload: dict):
         "items": items,
         "settings": payload.get("settings", {}),
         "status": "queued",
+        "events": [],  # historial para reproducir a suscriptores tardios
     }
     JOBS[job_id] = job
 
@@ -276,6 +284,10 @@ async def job_ws(ws: WebSocket, job_id: str):
         await ws.send_json({"type": "error", "message": "job no encontrado"})
     else:
         await ws.send_json({"type": "subscribed", "job_id": job_id, "status": job["status"]})
+        # Reproducir el historial de eventos para suscriptores tardios o reconexiones,
+        # de modo que el dashboard finalice bien aunque el job ya haya terminado.
+        for ev in job.get("events", []):
+            await ws.send_json(ev)
 
     try:
         # El dashboard solo escucha; mantenemos el socket abierto leyendo.
