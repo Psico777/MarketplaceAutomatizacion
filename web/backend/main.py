@@ -30,6 +30,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, H
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from PIL import Image
 
 # --- importar modulos del repo (raiz/src) ---
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
