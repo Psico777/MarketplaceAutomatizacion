@@ -21,6 +21,14 @@ listings_history.json
 ai_analysis_cache.json
 upload.pdf
 
+# Licencias (BD runtime, contiene hashes de claves) y build del agente
+licenses.db
+web/backend/licenses.db
+agent/build/
+agent/dist/
+agent/.venv/
+ElekaMarketplaceAgent.exe
+
 # Web frontend
 node_modules/
 web/frontend/node_modules/

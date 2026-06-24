@@ -1,0 +1,13 @@
+# Dependencias del agente local ELEKA Marketplace.
+# El cliente necesita ademas Google Chrome instalado (el chromedriver se
+# descarga en runtime via webdriver-manager).
+
+websockets>=12.0
+requests>=2.31.0
+selenium>=4.16.0
+webdriver-manager>=4.0.1
+pyotp>=2.9.0
+pillow>=10.0.0
+
+# Solo para construir el .exe (no es dependencia de runtime del cliente):
+# pyinstaller>=6.3.0

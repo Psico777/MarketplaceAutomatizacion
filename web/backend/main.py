@@ -500,6 +500,20 @@ async def ws_publish(ws: WebSocket):
 
 
 # ======================================================================
+#  Modelo hibrido: API de licencias + relay/cola de jobs (agente .exe)
+#  Se registran ANTES del catch-all SPA para que las rutas /api tengan
+#  prioridad sobre la ruta comodin del frontend.
+# ======================================================================
+try:
+    from licensing import router as license_router
+    app.include_router(license_router)
+    from relay import router as relay_router
+    app.include_router(relay_router)
+except Exception as e:  # pragma: no cover
+    print(f"[HIBRIDO] No se pudieron montar licencias/relay: {e}")
+
+
+# ======================================================================
 #  Frontend compilado (React build) servido en /
 # ======================================================================
 DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
